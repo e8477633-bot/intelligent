@@ -20,52 +20,51 @@ export default async function handler(req, res) {
     }]
   };
 
-  // We will try the Pro model first, then fallback to Flash if Pro is busy.
-  // The "-latest" tag ensures Google always routes to the newest working version.
-  const modelsToTry = [
-    'gemini-3.8-pro',
-    'gemini-2.5-flash'
-  ];
+  // ONLY use gemini-3.8-flash (the model new projects are required to use)
+  const modelName = 'gemini-3.8-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
 
-  let lastError = 'Unknown error';
-
-  for (const model of modelsToTry) {
+  // Retry up to 3 times to handle "high demand" spikes
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'x-goog-api-key': API_KEY 
-          },
-          body: JSON.stringify({ 
-            contents: history,
-            systemInstruction: systemInstruction
-          })
-        }
-      );
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-goog-api-key': API_KEY 
+        },
+        body: JSON.stringify({ 
+          contents: history,
+          systemInstruction: systemInstruction
+        })
+      });
 
       const data = await response.json();
 
       if (!response.ok) {
-        // If the error is high demand, we throw it to the catch block and try the next model
-        throw new Error(data.error?.message || 'Google API Error');
+        const msg = data.error?.message || 'Google API Error';
+        // If it's a 404 (model not found), don't retry; return immediately
+        if (response.status === 404) {
+          return res.status(404).json({ error: msg });
+        }
+        // If it's a 503 (high demand) or 429, wait and retry
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 1500));
+          continue;
+        }
+        throw new Error(msg);
       }
 
       const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!aiText) throw new Error('No text returned.');
       
-      if (aiText) {
-        return res.status(200).json({ reply: aiText });
-      }
+      return res.status(200).json({ reply: aiText });
 
     } catch (err) {
-      console.warn(`Model ${model} failed:`, err.message);
-      lastError = err.message;
-      // The loop continues to the next model
+      if (attempt === 3) {
+        return res.status(500).json({ error: err.message });
+      }
+      await new Promise(r => setTimeout(r, 1500));
     }
   }
-
-  // If both models fail, return the last error
-  return res.status(500).json({ error: lastError });
 }
