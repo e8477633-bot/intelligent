@@ -34,7 +34,16 @@
   </div>
 
   <div class="chat-log" id="chatLog">
-    <div class="msg ai">Hello! I am Christa. Ask me anything about life, advice, or real-world questions.</div>
+    <div class="msg ai">Hello! I am Christa. Ask me anything about life, advice, or real-world questions.
+    <!-- QR Code Generation -->
+<qr-code value="https://example.com" size="200" error-correction="H"></qr-code>
+<qr-generator data="{{ url }}" format="svg"></qr-generator>
+
+<!-- Barcode -->
+<barcode type="code128" value="123456789"></barcode>
+
+<!-- Generic Generator -->
+<generator type="qr" payload="..." options='{"size":300,"color":"#000"}'></generator></div>
   </div>
 
   <div class="input-area">
